@@ -8,12 +8,12 @@ var util = require('util');
 var SerialPortLib = require("serialport");
 var SerialPort = SerialPortLib.SerialPort;
 
-var DeviceUSB = require(root+"manager/vo/deviceUSB.js");
-var DeviceTest = require(root+"manager/vo/deviceTest.js");
+var DeviceUSB = require(root + "manager/vo/deviceUSB.js");
+var DeviceTest = require(root + "manager/vo/deviceTest.js");
 //var DeviceWifi = require(root+"models/vo/deviceWifi.js");
-var NavManager = require(_root+"manager/NavManager.js");
+var NavManager = require(_root + "manager/NavManager.js");
 
-var DeviceManagerClass = function DeviceManagerClass(){
+var DeviceManagerClass = function DeviceManagerClass() {
   EventEmitter.call(this);
 
   var that = this;
@@ -21,8 +21,8 @@ var DeviceManagerClass = function DeviceManagerClass(){
   this.readyDevices = {};
 
   this.resetPort();
-  this.interval = setInterval(function(){that.resetPort()}, 1000);
-                                        //portName, pnpId, manufacturer, typeId, version, shieldID, shieldVersion, shieldVariant
+  this.interval = setInterval(function () { that.resetPort() }, 1000);
+  //portName, pnpId, manufacturer, typeId, version, shieldID, shieldVersion, shieldVariant
 
   //that.createDevice("test2", new DeviceTest("test2", 20, "Sikwi", 2,1,1,1));
   //that.createDevice("test3", new DeviceTest("test3", 34, "Sikwi", 3,1,1,1));
@@ -38,75 +38,75 @@ var DeviceManagerClass = function DeviceManagerClass(){
 
 util.inherits(DeviceManagerClass, EventEmitter);
 
-DeviceManagerClass.prototype.resetPort = function(){
+DeviceManagerClass.prototype.resetPort = function () {
   var that = this;
 
-  SerialPortLib.list(function (err, results){
+  SerialPort.list(function (err, results) {
 
-    results.forEach(function(port){
-        var portName = port.comName;
-        //console.log(port);
-        if(that.devices[portName] == null && ["FTDI", "Silicon Labs"].includes(port.manufacturer)){
-            console.log("port.serialNumber", port.serialNumber);
-            //that.createDevice(portName, new DeviceUSB(portName, port.pnpId, port.manufacturer));
-            that.createDevice(portName, new DeviceUSB(portName, port.serialNumber, port.manufacturer));
-        }
+    results.forEach(function (port) {
+      var portName = port.comName;
+      //console.log(port);
+      if (that.devices[portName] == null && ["FTDI", "Silicon Labs"].includes(port.manufacturer)) {
+        console.log("port.serialNumber", port.serialNumber);
+        //that.createDevice(portName, new DeviceUSB(portName, port.pnpId, port.manufacturer));
+        that.createDevice(portName, new DeviceUSB(portName, port.serialNumber, port.manufacturer));
+      }
     });
 
-    for(var port in that.devices){
+    for (var port in that.devices) {
       var found = false;
-      results.forEach(function(result){
-        if(result.comName == port)
+      results.forEach(function (result) {
+        if (result.comName == port)
           found = true;
       });
 
-      if(found == false){
+      if (found == false) {
         that.devices[port].delete();
       }
     }
   });
 }
 
-DeviceManagerClass.prototype.createDevice = function(name, device){
-    var that = this;
-    that.devices[name] = device;
+DeviceManagerClass.prototype.createDevice = function (name, device) {
+  var that = this;
+  that.devices[name] = device;
 
-    device.on("ready", function(device){
-      that.readyDevicesHandler(device);
-    });
+  device.on("ready", function (device) {
+    that.readyDevicesHandler(device);
+  });
 
-    device.on("open", function(device){
-      console.log("DeviceManagerClass open");
-      console.log("Delegate a bit open emission");
-      setTimeout( that.emit.bind( that, "open", device), 800 );
-    });
+  device.on("open", function (device) {
+    console.log("DeviceManagerClass open");
+    console.log("Delegate a bit open emission");
+    setTimeout(that.emit.bind(that, "open", device), 800);
+  });
 
-    device.on("change", function(device){
-      that.emit("change", device);
-    });
+  device.on("change", function (device) {
+    that.emit("change", device);
+  });
 
-    device.on("receive", function(data){
-      that.emit("receive", data);
-    });
+  device.on("receive", function (data) {
+    that.emit("receive", data);
+  });
 
-    device.on("write", function(data){
-      that.emit("write", data);
-    });
+  device.on("write", function (data) {
+    that.emit("write", data);
+  });
 
-    device.on("printerFound", function(device){
-      that.emit("printerFound", device);
-    });
+  device.on("printerFound", function (device) {
+    that.emit("printerFound", device);
+  });
 
-    device.on("delete", function(device){
-      console.log("deletePortHandler", device);
-      that.deletePortHandler(device);
-    });
+  device.on("delete", function (device) {
+    console.log("deletePortHandler", device);
+    that.deletePortHandler(device);
+  });
 
-    that.emit("add", device);
-    //device.open();
+  that.emit("add", device);
+  //device.open();
 }
 
-DeviceManagerClass.prototype.deletePortHandler = function(device){
+DeviceManagerClass.prototype.deletePortHandler = function (device) {
   var that = this;
 
   that.emit("remove", device);
@@ -115,18 +115,18 @@ DeviceManagerClass.prototype.deletePortHandler = function(device){
   delete that.readyDevices[device.portName];
 }
 
-DeviceManagerClass.prototype.readyDevicesHandler = function(device){
+DeviceManagerClass.prototype.readyDevicesHandler = function (device) {
   var that = this;
   that.readyDevices[device.portName] = device;
 }
 
-DeviceManagerClass.prototype.setSelectedDevice = function(device){
+DeviceManagerClass.prototype.setSelectedDevice = function (device) {
   var that = this
   that.selectedDevice = device;
   that.emit("deviceSelect", that.selectedDevice);
 }
 
-DeviceManagerClass.prototype.getSelectedDevice = function(device){
+DeviceManagerClass.prototype.getSelectedDevice = function (device) {
   var that = this
   return that.selectedDevice;
 }
@@ -134,11 +134,11 @@ DeviceManagerClass.prototype.getSelectedDevice = function(device){
 
 DeviceManagerClass.instance = null;
 
-DeviceManagerClass.getInstance = function(){
-    if(this.instance === null){
-        this.instance = new DeviceManagerClass();
-    }
-    return this.instance;
+DeviceManagerClass.getInstance = function () {
+  if (this.instance === null) {
+    this.instance = new DeviceManagerClass();
+  }
+  return this.instance;
 }
 
 module.exports = DeviceManagerClass.getInstance();

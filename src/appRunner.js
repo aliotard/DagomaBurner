@@ -1,20 +1,18 @@
-const ENABLE_AUTO_UPDATE = true;
+const ENABLE_AUTO_UPDATE = false;
 
 const electron = require('electron');
-const {app} = electron;
-const {BrowserWindow} = electron;
-const {dialog} = require('electron');
-const {ipcMain, ipcRenderer, shell} = electron;
+const { app, BrowserWindow, dialog, ipcMain } = electron;
 
-const fs = require('fs');
-const unzip = require('unzip');
+//const fs = require('fs');
+//const unzip = require('unzip');
 const request = require('request');
 
-var that = this;
+const remote = require('@electron/remote/main');
+remote.initialize();
 
 "use strict";
 
-var AppRunnerClass = function AppRunnerClass(){
+var AppRunnerClass = function AppRunnerClass() {
   this.mainWindow = null;
   this.updateWindow = null;
   this.versionInAppData = false;
@@ -25,9 +23,10 @@ AppRunnerClass.prototype.run = function (bVersionInAppData, sUpdateUrl, sApplica
   var that = this;
 
   global.state = {
-    ready : false,
-    hasUpdate : false,
-    updateChecked : false}
+    ready: false,
+    hasUpdate: false,
+    updateChecked: false
+  }
 
   this.versionInAppData = bVersionInAppData;
   this.updateUrl = sUpdateUrl;
@@ -36,16 +35,16 @@ AppRunnerClass.prototype.run = function (bVersionInAppData, sUpdateUrl, sApplica
   this.checkForUpdate();
 
   // Quit when all windows are closed.
-  app.on('window-all-closed', function() {
+  app.on('window-all-closed', function () {
     app.quit();
   });
 
-  app.on('activate-with-no-open-windows', function(){
+  app.on('activate-with-no-open-windows', function () {
     console.log("Run App from ", "activate-with-no-open-windows");
     that.runApp();
   });
 
-  app.on('ready', function(){
+  app.on('ready', function () {
     console.log("Run App from ", "ready");
     console.log("locale", app.getLocale());
     global.state.ready = true;
@@ -55,80 +54,84 @@ AppRunnerClass.prototype.run = function (bVersionInAppData, sUpdateUrl, sApplica
 
 //200
 //304
-AppRunnerClass.prototype.runApp = function(){
+AppRunnerClass.prototype.runApp = function () {
   var that = this;
 
-  if(global.state.ready == false)
+  if (global.state.ready == false)
     return console.log("    return ready == false");
 
-  if(global.state.updateChecked == false){
+  if (global.state.updateChecked == false) {
     that.openUpdateWindow();
     return console.log("    return updateChecked == false");
   }
 
-  if(global.state.hasUpdate == false && that.mainWindow == null){
+  if (global.state.hasUpdate == false && that.mainWindow == null) {
     return that.openWindow();
   }
-  else if(that.updateWindow == null){
+  else if (that.updateWindow == null) {
     return that.openUpdateWindow();
   }
-  else if(that.updateWindow){
-    if(global.state.updateChecked && global.state.hasUpdate)
+  else if (that.updateWindow) {
+    if (global.state.updateChecked && global.state.hasUpdate)
       that.updateWindow.webContents.send('hasUpdate');
   }
 
   return console.log("    return hasUpdate : ", global.state.hasUpdate, ", mainWindow == null : ", that.mainWindow == null, ", updateWindow == null : ", that.updateWindow == null);
 }
 
-AppRunnerClass.prototype.openWindow = function(){
+AppRunnerClass.prototype.openWindow = function () {
   var that = this;
 
-  if(that.mainWindow)
+  if (that.mainWindow)
     return;
 
-  if(process.env.NODE_ENV == 'debug') {
+  if (process.env.NODE_ENV == 'debug') {
     that.mainWindow = new BrowserWindow({
-      fullscreen: true,
-      resizable: true,
-      frame: true,
-      //type:"dock",
       title: "DagomApp",
       name: "DagomApp",
       'use-content-size': true,
       autoHideMenuBar: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
 
       //"icon":`file://${__dirname}/icon.ico` make a crash on windows! do not uncomment!
     });
   } else {
     that.mainWindow = new BrowserWindow({
       width: 500,
-      height:  (process.platform=="win32")?480:450,
-      resizable: false, frame: true,
-      //type:"dock",
+      height: (process.platform == "win32") ? 480 : 450,
+      resizable: false,
       title: "DagomApp",
       name: "DagomApp",
       'use-content-size': true,
       autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
 
       //"icon":`file://${__dirname}/icon.ico` make a crash on windows! do not uncomment!
     });
   }
 
-  if(process.env.NODE_ENV == 'debug') that.mainWindow.webContents.openDevTools();
+  remote.enable(that.mainWindow.webContents);
+
+  //if (process.env.NODE_ENV == 'debug') that.mainWindow.webContents.openDevTools();
 
   //mainWindow.loadURL(`file://${__dirname}/views/index.html`);
   console.log("that.versionInAppData", that.versionInAppData);
-  if(that.versionInAppData){
+  if (that.versionInAppData) {
     console.log("open Main Window from appData");
-    that.mainWindow.loadURL("file://"+app.getPath("userData")+"/app/views/index.html");
+    that.mainWindow.loadURL("file://" + app.getPath("userData") + "/app/views/index.html");
   }
   else {
     console.log("open Main Window from application directory");
     that.mainWindow.loadURL(`file://${that.applicationDirname}/views/index.html`);
   }
   that.mainWindow.focus();
-  that.mainWindow.on("will-navigate", function(e) { e.preventDefault() });
-  //mainWindow.openDevTools();
+  that.mainWindow.on("will-navigate", function (e) { e.preventDefault() });
 
   that.mainWindow.webContents.on('crashed', function () {
     const options = {
@@ -143,54 +146,55 @@ AppRunnerClass.prototype.openWindow = function(){
     })
   })
 
-  if(that.updateWindow)
+  if (that.updateWindow)
     that.updateWindow.close();
 };
 
-AppRunnerClass.prototype.openUpdateWindow = function(){
+AppRunnerClass.prototype.openUpdateWindow = function () {
   var that = this;
 
-  if(that.updateWindow)
+  if (that.updateWindow)
     return;
 
   that.updateWindow = new BrowserWindow({
     width: 300,
-    height:  (process.platform=="win32")?280:250,
+    height: (process.platform == "win32") ? 280 : 250,
     resizable: false, frame: false,
     title: "DagomApp",
     'use-content-size': true,
     //"icon":`file://${__dirname}/icon.ico` make a crash on windows! do not uncomment!
   });
   //updateWindow.loadURL(`file://${__dirname}/views/index.html`);
-  if(that.versionInAppData){
-    that.updateWindow.loadURL("file://"+app.getPath("userData")+"/app/views/update.html");
+  if (that.versionInAppData) {
+    that.updateWindow.loadURL("file://" + app.getPath("userData") + "/app/views/update.html");
   }
   else {
     that.updateWindow.loadURL(`file://${that.applicationDirname}/views/update.html`);
   }
   that.updateWindow.focus();
-  that.updateWindow.on("will-navigate", function(e) { e.preventDefault() });
+  that.updateWindow.on("will-navigate", function (e) { e.preventDefault() });
   //updateWindow.openDevTools();
 
-  ipcMain.on("updateWindowReady", function(e){
-    if(global.state.updateChecked && global.state.hasUpdate)
+  ipcMain.on("updateWindowReady", function (e) {
+    if (global.state.updateChecked && global.state.hasUpdate)
       that.updateWindow.webContents.send('hasUpdate');
   });
 
   that.updateWindow.webContents.on('did-finish-load', () => {
-    if(global.state.updateChecked && global.state.hasUpdate)
+    if (global.state.updateChecked && global.state.hasUpdate)
       that.updateWindow.webContents.send('hasUpdate');
   });
 };
 
-AppRunnerClass.prototype.checkForUpdate = function(){
+AppRunnerClass.prototype.checkForUpdate = function () {
   var that = this;
   var ws;
 
-  if(ENABLE_AUTO_UPDATE){
+  if (ENABLE_AUTO_UPDATE) {
     var time = process.hrtime();
 
-    ipcMain.on("acceptUpdate", function(e){
+    //FIXME: rewrite this without unzip which is not compatible with recent versions of Node.js
+    /*ipcMain.on("acceptUpdate", function(e){
       request
         .get(that.updateUrl)
         .pipe(ws = fs.createWriteStream(app.getPath("userData")+"/app.zip"));
@@ -223,9 +227,9 @@ AppRunnerClass.prototype.checkForUpdate = function(){
             });
 
       });
-    });
+    });*/
 
-    ipcMain.on("discardUpdate", function(e){
+    ipcMain.on("discardUpdate", function (e) {
       console.log("User Discard Update");
 
       global.state.updateChecked = true;
@@ -235,30 +239,30 @@ AppRunnerClass.prototype.checkForUpdate = function(){
     });
 
     console.log("updateUrl : ", that.updateUrl);
-    if(!that.updateUrl || that.updateUrl == "THE_UPDATE_URL"){
+    if (!that.updateUrl || that.updateUrl == "THE_UPDATE_URL") {
       console.error("No conform update url");
       global.state.updateChecked = true;
       console.log("Run App from ", "No conform update url");
       that.runApp();
-    }else{
+    } else {
       request
         .get(that.updateUrl)
-        .on("error", function(err){
+        .on("error", function (err) {
           global.state.updateChecked = true;
           console.log("Run App from ", "error in updateURL Checking");
           that.runApp();
         })
-        .on('response', function(response) {
+        .on('response', function (response) {
 
           var diff = process.hrtime(time);
-          console.log(`get status code in  ${(diff[0] * 1e9 + diff[1])/1e9} seconds : ${response.statusCode}`);
+          console.log(`get status code in  ${(diff[0] * 1e9 + diff[1]) / 1e9} seconds : ${response.statusCode}`);
 
-          if(response.statusCode == 200){
+          if (response.statusCode == 200) {
             global.state.hasUpdate = true;
             global.state.updateChecked = true;
             console.log("Run App from ", "Status 200");
             that.runApp();
-          }else{
+          } else {
             global.state.updateChecked = true;
             console.log("Run App from ", "Status != 200");
             that.runApp();
@@ -266,7 +270,7 @@ AppRunnerClass.prototype.checkForUpdate = function(){
         });
     }
   }
-  else{
+  else {
     console.log("Run App from ", "ENABLE_AUTO_UPDATE FALSE");
     global.state.updateChecked = true;
     that.runApp();
@@ -275,11 +279,11 @@ AppRunnerClass.prototype.checkForUpdate = function(){
 
 AppRunnerClass.instance = null;
 
-AppRunnerClass.getInstance = function(){
-    if(this.instance === null){
-        this.instance = new AppRunnerClass();
-    }
-    return this.instance;
+AppRunnerClass.getInstance = function () {
+  if (this.instance === null) {
+    this.instance = new AppRunnerClass();
+  }
+  return this.instance;
 }
 
 module.exports = AppRunnerClass.getInstance();
