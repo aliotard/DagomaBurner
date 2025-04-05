@@ -2,16 +2,14 @@
 
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
-//var SerialPortLib = require("serial-worker");
-var SerialPortLib = require("serialport");
-//var SerialPortLibNative = require("serialport");
-var SerialPort = SerialPortLib.SerialPort;
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
 var AbstractDeviceClass = require("./abstractDevice.js");
 
 var root = __dirname + "/../";
 var data = "";
 
-var DeviceClassUSB = function(portName, uid, manufacturer){
+var DeviceClassUSB = function (portName, uid, manufacturer) {
   EventEmitter.call(this);
 
   this.parent = new AbstractDeviceClass(portName.split("/dev/").join(""), this);
@@ -27,17 +25,17 @@ var DeviceClassUSB = function(portName, uid, manufacturer){
 
 util.inherits(DeviceClassUSB, EventEmitter);
 
-DeviceClassUSB.prototype.templateObject = function (deviceData){
+DeviceClassUSB.prototype.templateObject = function (deviceData) {
   return this.parent.templateObject(deviceData);
 }
 
-DeviceClassUSB.prototype.destroy = function (){
+DeviceClassUSB.prototype.destroy = function () {
   var that = this;
   that.parent.destroy();
   that.close();
 }
 
-DeviceClassUSB.prototype.open = function (){
+DeviceClassUSB.prototype.open = function () {
   var that = this;
   that.ready = false;
   that.printerFound = false;
@@ -47,25 +45,22 @@ DeviceClassUSB.prototype.open = function (){
 
   that.emit("open", that);
 
-  if(that.serial == null){
+  if (that.serial == null) {
     //console.log("openSerial?", that.baudRate);
-    that.serial = new SerialPort(that.portName, {
-      baudrate: that.baudRate,
-      //parser: {type:"readline", value:"\r\n"},
-      parser: SerialPortLib.parsers.readline("\n"),
-      //parser: SerialPortLib.parsers.byteDelimiter([10, 13]),
-      disconnectedCallback : function disconnected(err){
-        if(that.isBuilding == false)
-          that.delete();
-      }
-    }, false);
+    that.serial = new SerialPort({
+      path: that.portName,
+      baudRate: that.baudRate,
+      autoOpen: false
+    });
+    const parser = that.serial.pipe(new ReadlineParser());
+    parser.on('data', that.serialDataListener);
   }
 
   console.log("Delegating a bit port opening ...");
-  setTimeout( that.serial.open.bind( that.serial, function (error){
+  setTimeout(that.serial.open.bind(that.serial, function (error) {
     that.resetPort();
     that.serialPortOpenHandler(error);
-  } ), 800);
+  }), 800);
   /*
   that.serial.open(function (error){
     that.resetPort();
@@ -74,20 +69,19 @@ DeviceClassUSB.prototype.open = function (){
   */
 }
 
-DeviceClassUSB.prototype.serialPortOpenHandler = function (error){
+DeviceClassUSB.prototype.serialPortOpenHandler = function (error) {
   var that = this;
 
-  if ( error && error != "Error: Port is already open"){
+  if (error && error != "Error: Port is already open") {
     console.error("error", error);
     that.delete();
-  }else{
-    if(!that.ready){
+  } else {
+    if (!that.ready) {
       that.emit("ready", that);
       console.log("ready");
     }
 
     that.ready = true;
-    that.serial.on('data', that.serialDataListener);
   }
 }
 
@@ -113,26 +107,26 @@ DeviceClassUSB.prototype.parseData = function(){
   data = data.substr(index);
   */
 
-  if(lineData.charCodeAt(0) == 0)
+  if (lineData.charCodeAt(0) == 0)
     lineData = lineData.substr(1);
 
-  if(lineData.charCodeAt(0) == 10)
+  if (lineData.charCodeAt(0) == 10)
     lineData = lineData.substr(1);
 
-  if(lineData.charCodeAt(0) == 13)
+  if (lineData.charCodeAt(0) == 13)
     lineData = lineData.substr(1);
   /*
   if(lineData.indexOf("start")==0 && that.hasStarted == false)
     that.hasStarted == true;
   */
   //console.log(lineData);
-  if(lineData.indexOf("echo:Marlin")==0 && that.printerFound==false){
+  if (lineData.indexOf("Marlin") == 0 && that.printerFound == false) {
     console.log("printerFound");
     that.emit("printerFound", that);
     that.printerFound = true;
   }
 
-  if(lineData.indexOf("MINTEMP triggered")>=0 || lineData.indexOf("MAXTEMP triggered")>=0){
+  if (lineData.indexOf("MINTEMP triggered") >= 0 || lineData.indexOf("MAXTEMP triggered") >= 0) {
     ModalManager.hideLoader();
     ModalManager.alert(I18n.currentLanguage().error_minmaxtemp_title, I18n.currentLanguage().error_minmaxtemp_message);
   }
@@ -161,8 +155,8 @@ DeviceClassUSB.prototype.parseData = function(){
       that.emit("change", that);
     }
   }else{*/
-    that.parseSerialData(lineData);
-    that.emit("receive", lineData);
+  that.parseSerialData(lineData);
+  that.emit("receive", lineData);
   //}
 
   return lineData != "";
@@ -174,25 +168,25 @@ DeviceClassUSB.prototype.setBaud = function (baudrate) {
   this.open();
 };
 
-DeviceClassUSB.prototype.endsWith = function(topic, suffix) {
-  return topic.match(suffix+"$") == suffix;
+DeviceClassUSB.prototype.endsWith = function (topic, suffix) {
+  return topic.match(suffix + "$") == suffix;
 };
 
 DeviceClassUSB.prototype.resetPort = function () {
   var that = this;
 
-  if(that.serial == null)
+  if (that.serial == null)
     return;
 
   that.serial.set({
     rts: true,
     dtr: true
-  }, function(err) {
+  }, function (err) {
     setTimeout(function clear() {
       that.serial.set({
         rts: false,
         dtr: false
-      }, function(err) {
+      }, function (err) {
         //console.log("port "+that.portName+" reset");
       });
     }, 250);
@@ -203,26 +197,25 @@ DeviceClassUSB.prototype.checkConnected = function () {
   var that = this;
 
   that.interval = setInterval(
-    function(){
-      that.serial.write("", function(err, results) {
-        if(err){
+    function () {
+      that.serial.write("", function (err, results) {
+        if (err) {
           console.log("error");
           that.delete();
         }
       });
     }
-  , 1000);
+    , 1000);
 }
 
-DeviceClassUSB.prototype.parseSerialData = function(data){
+DeviceClassUSB.prototype.parseSerialData = function (data) {
   var that = this;
 
   var res;
-  var re = new RegExp('(\\d*);(\\d*);(\\d*);(\\d*);(\\d*);(.*)','g');
-  while( res = re.exec(data)){
+  var re = new RegExp('(\\d*);(\\d*);(\\d*);(\\d*);(\\d*);(.*)', 'g');
+  while (res = re.exec(data)) {
     //0;0;3;0;14;
-    if(+res[1] == 0 && +res[2] == 0 && +res[3] == 3 && +res[4] == 0 && +res[5] == 14)
-    {
+    if (+res[1] == 0 && +res[2] == 0 && +res[3] == 3 && +res[4] == 0 && +res[5] == 14) {
       that.type = "Arduino";
       that.isNRFGateway = true;
       that.name = "NRFGateway";
@@ -231,20 +224,20 @@ DeviceClassUSB.prototype.parseSerialData = function(data){
   }
 }
 
-DeviceClassUSB.prototype.send = function (data){
-  if(this.serial != null){
+DeviceClassUSB.prototype.send = function (data) {
+  if (this.serial != null) {
     this.emit("write", data);
     this.serial.write(data);//+"\r\n");
     console.log("write", data);
   }
 }
 
-DeviceClassUSB.prototype.delete = function(){
+DeviceClassUSB.prototype.delete = function () {
   var that = this;
   that.parent.delete();
 }
 
-DeviceClassUSB.prototype.close = function(force){
+DeviceClassUSB.prototype.close = function (force) {
   var that = this;
 
   that.printerFound = false;
@@ -253,36 +246,35 @@ DeviceClassUSB.prototype.close = function(force){
   that.parent.close();
 
 
-  if(that.serial != null){
+  if (that.serial != null) {
     clearInterval(that.interval);
-    if(that.serialDataListener)
+    if (that.serialDataListener)
       that.serial.removeListener('data', that.serialDataListener);
 
-    try{
-      console.log( "Serial hardware closing ...");
+    try {
+      console.log("Serial hardware closing ...");
       //that.serial.disconnected();
-      that.serial.close( function(e) {
-        console.log( "Serial hardware closed" , e);
+      that.serial.close(function (e) {
+        console.log("Serial hardware closed", e);
       });
-    }catch(e){
-      console.log( "Serial hardware closing error", e);
+    } catch (e) {
+      console.log("Serial hardware closing error", e);
     }
     that.serial = null;
   }
 }
 
-DeviceClassUSB.prototype.pause = function(){
+DeviceClassUSB.prototype.pause = function () {
   var that = this;
   that.parent.pause();
   that.close(true);
 }
 
-DeviceClassUSB.prototype.resume = function(){
+DeviceClassUSB.prototype.resume = function () {
   var that = this;
   that.parent.resume();
 
-  if(that.serial != null)
-  {
+  if (that.serial != null) {
     that.open();
   }
 }

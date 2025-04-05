@@ -4,9 +4,7 @@ var root = __dirname + "/../";
 
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
-//var SerialPortLib = require("serial-worker"); //From Tibus Github
-var SerialPortLib = require("serialport");
-var SerialPort = SerialPortLib.SerialPort;
+const { SerialPort } = require('serialport');
 
 var DeviceUSB = require(root + "manager/vo/deviceUSB.js");
 var DeviceTest = require(root + "manager/vo/deviceTest.js");
@@ -38,33 +36,31 @@ var DeviceManagerClass = function DeviceManagerClass() {
 
 util.inherits(DeviceManagerClass, EventEmitter);
 
-DeviceManagerClass.prototype.resetPort = function () {
+DeviceManagerClass.prototype.resetPort = async function () {
   var that = this;
 
-  SerialPort.list(function (err, results) {
-
-    results.forEach(function (port) {
-      var portName = port.comName;
-      //console.log(port);
-      if (that.devices[portName] == null && ["FTDI", "Silicon Labs"].includes(port.manufacturer)) {
-        console.log("port.serialNumber", port.serialNumber);
-        //that.createDevice(portName, new DeviceUSB(portName, port.pnpId, port.manufacturer));
-        that.createDevice(portName, new DeviceUSB(portName, port.serialNumber, port.manufacturer));
-      }
-    });
-
-    for (var port in that.devices) {
-      var found = false;
-      results.forEach(function (result) {
-        if (result.comName == port)
-          found = true;
-      });
-
-      if (found == false) {
-        that.devices[port].delete();
-      }
+  const results = await SerialPort.list();
+  results.forEach(function (port) {
+    var portName = port.path;
+    //console.log(port);
+    if (that.devices[portName] == null && port.serialNumber /*&& ["FTDI", "Silicon Labs"].includes(port.manufacturer)*/) {
+      console.log("port.serialNumber", port.serialNumber);
+      //that.createDevice(portName, new DeviceUSB(portName, port.pnpId, port.manufacturer));
+      that.createDevice(portName, new DeviceUSB(portName, port.serialNumber, port.manufacturer));
     }
   });
+
+  for (var port in that.devices) {
+    var found = false;
+    results.forEach(function (result) {
+      if (result.path == port)
+        found = true;
+    });
+
+    if (found == false) {
+      that.devices[port].delete();
+    }
+  }
 }
 
 DeviceManagerClass.prototype.createDevice = function (name, device) {
